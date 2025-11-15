@@ -53,3 +53,30 @@ def geracao_dados(ispb):
         "recebedor_conta_transacional": recebedor_conta_transacional,
         "recebedor_tipo_conta": recebedor_tipo_conta,
     }
+
+def get_ultima_mensagem(ispb):
+    mensagem = Pix.objects.filter(
+        recebedor_agencia=ispb,
+        dado_visualizado=False
+    ).order_by("data_hora_pagamento").first()
+    
+    if mensagem:
+        Pix.objects.filter(id=mensagem.id).update(dado_visualizado=True)
+
+    return mensagem
+
+def get_multiplas_mensagens(ispb):
+    mensagens = list(
+        Pix.objects.filter(
+            recebedor_agencia=ispb,
+            dado_visualizado=False
+        ).order_by("data_hora_pagamento")[:10]
+    )
+
+    ids = [msg.id for msg in mensagens]
+
+    if ids:
+        Pix.objects.filter(id__in=ids).update(dado_visualizado=True)
+
+    return mensagens
+
