@@ -16,13 +16,27 @@ def cadastro_pix(request, ispb, number):
     return JsonResponse({"erro": "método não permitido"}, status=405)
 
 
-
+# refactor: quebrar em métodos menores
 @csrf_exempt
-def recuperacao_mensagens(request, ispb,  iterationId=None):
+def recuperacao_mensagens(request, ispb, iterationId=None):
     if request.method != "GET":
         return JsonResponse({"erro": "método não permitido"}, status=405)
 
     accept = request.headers.get("Accept", "application/json")
+
+    active_streams = PixStream.objects.filter(ispb=ispb, active=True).count()
+    if iterationId is None and active_streams >= 6:
+        return JsonResponse({"erro": "Limite de coletores atingido"}, status=429)
+
+    if iterationId is None:
+        iterationId = gerar_iteration_id()
+        PixStream.objects.create(ispb=ispb, iteration_id=iterationId, active=True)
+    else:
+        sessao = PixStream.objects.filter(
+            ispb=ispb, iteration_id=iterationId, active=True
+        ).first()
+        if not sessao:
+            return JsonResponse({"erro": "iterationId inválido ou sessão encerrada"}, status=404)
 
     start_time = time.time()
     msgs = []
@@ -36,26 +50,11 @@ def recuperacao_mensagens(request, ispb,  iterationId=None):
 
         if msgs or (time.time() - start_time) >= MAX_WAIT:
             break
+
         time.sleep(CHECK_INTERVAL)
 
-
-    if iterationId is None:
-        iterationId = gerar_iteration_id()
-        PixStream.objects.create(
-            ispb=ispb,
-            iteration_id=iterationId,
-            active=True
-        )
-    else:
-        sessao = PixStream.objects.filter(
-            ispb=ispb,
-            iteration_id=iterationId,
-            active=True
-        ).first()
-        if not sessao:
-            return JsonResponse({"erro": "iterationId inválido ou sessão encerrada"}, status=404)
-
     status_code = 200 if msgs else 204
+
 
     mensagens_json = [
         {
@@ -86,7 +85,9 @@ def recuperacao_mensagens(request, ispb,  iterationId=None):
 
     response = JsonResponse({"mensagens": mensagens_json}, status=status_code)
     response["Pull-Next"] = f"/api/pix/{ispb}/stream/{iterationId}"
+
     return response
+
 
 
 @csrf_exempt
