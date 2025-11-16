@@ -46,3 +46,17 @@ def recuperacao_mensagens(request, ispb):
     
     return JsonResponse({"erro": "método não permitido"}, status=405)
 
+
+@csrf_exempt
+def stream_iteration(request, ispb, iterationId):
+    try:
+        sessao = PixStream.objects.get(
+            ispb=ispb,
+            iteration_id=iterationId,
+            active=True
+        )
+    except PixStream.DoesNotExist:
+        return JsonResponse({"erro": "iterationId inválido ou sessão encerrada"}, status=404)
+
+    return recuperacao_mensagens(request, ispb)
+
