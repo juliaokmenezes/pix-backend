@@ -80,3 +80,7 @@ def get_multiplas_mensagens(ispb):
 
     return mensagens
 
+
+
+def gerar_iteration_id():
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))

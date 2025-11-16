@@ -1,4 +1,7 @@
+import uuid
 from django.db import models
+from django.utils import timezone
+
 
 class Pix(models.Model):
     end_to_end_id = models.CharField(max_length=50, unique=True)
@@ -25,8 +28,13 @@ class Pix(models.Model):
 
 
 class PixStream(models.Model):
-    ispb = models.CharField(max_length=20)
-    interation_id = models.CharField(max_length=50, unique=True)
-    last_message_id = models.IntegerField(null=True)
-    active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+
+    interaction_id = models.CharField(max_length=50, unique=True, default=uuid.uuid4)
+    ispb = models.CharField(max_length=8)
+    criacao = models.DateTimeField(auto_now_add=True)
+    ativo = models.BooleanField(default=True)
+    
+    def __str__(self):
+        return f"{self.ispb} - {self.iteration_id} - {'ativo' if self.ativo else 'finalizado'}"
+
+
