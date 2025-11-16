@@ -56,7 +56,7 @@ def geracao_dados(ispb):
 
 def get_ultima_mensagem(ispb):
     mensagem = Pix.objects.filter(
-        recebedor_agencia=ispb,
+        recebedor_ispb=ispb,
         dado_visualizado=False
     ).order_by("data_hora_pagamento").first()
     
@@ -68,7 +68,7 @@ def get_ultima_mensagem(ispb):
 def get_multiplas_mensagens(ispb):
     mensagens = list(
         Pix.objects.filter(
-            recebedor_agencia=ispb,
+            recebedor_ispb=ispb,
             dado_visualizado=False
         ).order_by("data_hora_pagamento")[:10]
     )
