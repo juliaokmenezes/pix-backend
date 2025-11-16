@@ -3,6 +3,10 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .utils import popular_banco, get_multiplas_mensagens, get_ultima_mensagem, gerar_iteration_id
 from .models import Pix, PixStream
+import time
+
+MAX_WAIT = 8  
+CHECK_INTERVAL = 0.5  
 
 @csrf_exempt
 def cadastro_pix(request, ispb, number):
@@ -20,11 +24,20 @@ def recuperacao_mensagens(request, ispb,  iterationId=None):
 
     accept = request.headers.get("Accept", "application/json")
 
-    if accept == "multipart/json":
-        msgs = get_multiplas_mensagens(ispb)
-    else:
-        msg = get_ultima_mensagem(ispb)
-        msgs = [msg] if msg else []
+    start_time = time.time()
+    msgs = []
+
+    while True:
+        if accept == "multipart/json":
+            msgs = get_multiplas_mensagens(ispb)
+        else:
+            msg = get_ultima_mensagem(ispb)
+            msgs = [msg] if msg else []
+
+        if msgs or (time.time() - start_time) >= MAX_WAIT:
+            break
+        time.sleep(CHECK_INTERVAL)
+
 
     if iterationId is None:
         iterationId = gerar_iteration_id()
