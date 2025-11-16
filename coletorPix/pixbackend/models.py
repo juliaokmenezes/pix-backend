@@ -22,3 +22,11 @@ class Pix(models.Model):
     recebedor_tipo_conta = models.CharField(max_length=10)
 
     dado_visualizado = models.BooleanField(default=False)
+
+
+class PixStream(models.Model):
+    ispb = models.CharField(max_length=20)
+    interation_id = models.CharField(max_length=50, unique=True)
+    last_message_id = models.IntegerField(null=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
