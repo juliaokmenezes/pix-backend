@@ -29,7 +29,7 @@ class Pix(models.Model):
 
 class PixStream(models.Model):
 
-    interaction_id = models.CharField(max_length=50, unique=True, default=uuid.uuid4)
+    iteration_id = models.CharField(max_length=50, unique=True, default=lambda: uuid.uuid4().hex)
     ispb = models.CharField(max_length=8)
     criacao = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)

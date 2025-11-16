@@ -18,25 +18,34 @@ def cadastro_pix(request, ispb, number):
 
 # refactor: quebrar em métodos menores
 @csrf_exempt
+@transaction.atomic
 def recuperacao_mensagens(request, ispb, iterationId=None):
     if request.method != "GET":
         return JsonResponse({"erro": "método não permitido"}, status=405)
 
     accept = request.headers.get("Accept", "application/json")
 
-    active_streams = PixStream.objects.filter(ispb=ispb, active=True).count()
-    if iterationId is None and active_streams >= 6:
-        return JsonResponse({"erro": "Limite de coletores atingido"}, status=429)
-
     if iterationId is None:
-        iterationId = gerar_iteration_id()
-        PixStream.objects.create(ispb=ispb, iteration_id=iterationId, active=True)
+            active_streams = PixStream.objects.filter(ispb=ispb, active=True).count()
+            if active_streams >= 6:
+                return JsonResponse({
+                    "erro": "Limite de coletores simultâneos atingido (máximo: 6)",
+                    "active_streams": active_streams
+                }, status=429)
+            iterationId = gerar_iteration_id()
+            PixStream.objects.create(ispb=ispb, iteration_id=iterationId, active=True)
     else:
         sessao = PixStream.objects.filter(
-            ispb=ispb, iteration_id=iterationId, active=True
+            ispb=ispb, 
+            iteration_id=iterationId, 
+            active=True
         ).first()
+        
         if not sessao:
-            return JsonResponse({"erro": "iterationId inválido ou sessão encerrada"}, status=404)
+            return JsonResponse({
+                "erro": "iterationId inválido ou sessão já encerrada"
+            }, status=404)
+
 
     start_time = time.time()
     msgs = []
@@ -91,18 +100,27 @@ def recuperacao_mensagens(request, ispb, iterationId=None):
 
 
 @csrf_exempt
+@transaction.atomic
 def stream_delete(request, ispb, iterationId):
     if request.method != "DELETE":
-        return JsonResponse({"erro": "método não permitido"}, status=405)
+        return JsonResponse({"erro": "Método não permitido"}, status=405)
 
-    atual = PixStream.objects.filter(
-        ispb=ispb, iteration_id=iterationId, active=True
+    sessao = PixStream.objects.filter(
+        ispb=ispb, 
+        iteration_id=iterationId, 
+        active=True
     ).first()
 
-    if not atual:
-        return JsonResponse({"erro": "iterationId inválido ou já encerrado"}, status=404)
+    if not sessao:
+        return JsonResponse({
+            "erro": "iterationId inválido ou sessão já encerrada"
+        }, status=404)
 
-    atual.active = False
-    atual.save()
+    sessao.active = False
+    sessao.save(update_fields=['active'])
 
-    return JsonResponse({}, status=200)
+    return JsonResponse({
+        "mensagem": "Stream encerrado com sucesso",
+        "iterationId": iterationId
+    }, status=200)
+

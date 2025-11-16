@@ -1,6 +1,7 @@
 import random
 import string
 from datetime import datetime, timedelta
+from django.db import transaction
 from .models import Pix
 
 
@@ -54,30 +55,34 @@ def geracao_dados(ispb):
         "recebedor_tipo_conta": recebedor_tipo_conta,
     }
 
+@transaction.atomic
 def get_ultima_mensagem(ispb):
-    mensagem = Pix.objects.filter(
+    mensagem = Pix.objects.select_for_update(skip_locked=True).filter(
         recebedor_ispb=ispb,
         dado_visualizado=False
     ).order_by("data_hora_pagamento").first()
     
     if mensagem:
-        Pix.objects.filter(id=mensagem.id).update(dado_visualizado=True)
-
+        mensagem.dado_visualizado = True
+        mensagem.save(update_fields=['dado_visualizado'])
+    
     return mensagem
 
-def get_multiplas_mensagens(ispb):
+
+@transaction.atomic
+def get_multiplas_mensagens(ispb, limit=10):
+
     mensagens = list(
-        Pix.objects.filter(
+        Pix.objects.select_for_update(skip_locked=True).filter(
             recebedor_ispb=ispb,
             dado_visualizado=False
-        ).order_by("data_hora_pagamento")[:10]
+        ).order_by("data_hora_pagamento")[:limit]
     )
-
-    ids = [msg.id for msg in mensagens]
-
-    if ids:
+    
+    if mensagens:
+        ids = [msg.id for msg in mensagens]
         Pix.objects.filter(id__in=ids).update(dado_visualizado=True)
-
+    
     return mensagens
 
 
