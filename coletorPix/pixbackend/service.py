@@ -3,7 +3,8 @@ import random
 import string
 from django.db import transaction
 from .models import Pix, PixStream
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.utils import timezone
 from .utils import gerar_iteration_id
 
 MAX_WAIT = 8
@@ -25,10 +26,9 @@ def geracao_dados(ispb):
             break
 
     valor = round(random.uniform(1, 5000), 2)
-
     tx_id = ''.join(random.choices(string.ascii_letters + string.digits, k=15))
     campo_livre = ""
-    data_hora_pagamento = datetime.now() - timedelta(minutes=random.randint(0, 9999))
+    data_hora_pagamento = timezone.now() - timedelta(minutes=random.randint(0, 9999))
     pagador_nome = random.choice(["Maria", "João", "Ana", "Carlos", "Beatriz", "Pedro"])
     pagador_cpf_cnpj = ''.join(random.choices(string.digits, k=11))
     pagador_ispb = ''.join(random.choices(string.digits, k=8))
