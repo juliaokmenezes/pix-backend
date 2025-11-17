@@ -13,7 +13,6 @@ MULTIPART_LIMIT = 10
 
 @transaction.atomic
 def popular_banco(ispb, number):
-    #atualizar para metodologia mais eficiente (concorrencia)
     for i in range(number):
         dados = geracao_dados(ispb)
         Pix.objects.create(**dados)
