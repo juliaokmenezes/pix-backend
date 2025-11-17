@@ -1,22 +1,29 @@
-from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .utils import popular_banco, get_multiplas_mensagens, get_ultima_mensagem, gerar_iteration_id
-from .models import Pix, PixStream
-import time
+from django.db import transaction
+from .service import (
+    popular_banco,
+    buscar_mensagens_long_polling,
+    criar_ou_validar_stream
+)
+from .serializers import serializar_mensagens
 
-MAX_WAIT = 8  
-CHECK_INTERVAL = 0.5  
+
+MAX_WAIT = 8
+CHECK_INTERVAL = 0.5
+MAX_STREAMS = 6
+MULTIPART_LIMIT = 10
+
 
 @csrf_exempt
 def cadastro_pix(request, ispb, number):
-    if request.method == "POST":
-        popular_banco(ispb, number)
-        return JsonResponse({"mensagem": "Pix Cadastrado com Sucesso"})
-    return JsonResponse({"erro": "método não permitido"}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"erro": "método não permitido"}, status=405)
+
+    popular_banco(ispb, number)
+    return JsonResponse({"mensagem": "Pix Cadastrado com Sucesso"})
 
 
-# refactor: quebrar em métodos menores
 @csrf_exempt
 @transaction.atomic
 def recuperacao_mensagens(request, ispb, iterationId=None):
@@ -24,79 +31,16 @@ def recuperacao_mensagens(request, ispb, iterationId=None):
         return JsonResponse({"erro": "método não permitido"}, status=405)
 
     accept = request.headers.get("Accept", "application/json")
+    iterationId, erro_response = criar_ou_validar_stream(ispb, iterationId)
+    if erro_response:
+        return erro_response
 
-    if iterationId is None:
-            active_streams = PixStream.objects.filter(ispb=ispb, active=True).count()
-            if active_streams >= 6:
-                return JsonResponse({
-                    "erro": "Limite de coletores simultâneos atingido (máximo: 6)",
-                    "active_streams": active_streams
-                }, status=429)
-            iterationId = gerar_iteration_id()
-            PixStream.objects.create(ispb=ispb, iteration_id=iterationId, active=True)
-    else:
-        sessao = PixStream.objects.filter(
-            ispb=ispb, 
-            iteration_id=iterationId, 
-            active=True
-        ).first()
-        
-        if not sessao:
-            return JsonResponse({
-                "erro": "iterationId inválido ou sessão já encerrada"
-            }, status=404)
-
-
-    start_time = time.time()
-    msgs = []
-
-    while True:
-        if accept == "multipart/json":
-            msgs = get_multiplas_mensagens(ispb)
-        else:
-            msg = get_ultima_mensagem(ispb)
-            msgs = [msg] if msg else []
-
-        if msgs or (time.time() - start_time) >= MAX_WAIT:
-            break
-
-        time.sleep(CHECK_INTERVAL)
+    msgs = buscar_mensagens_long_polling(ispb, accept)
 
     status_code = 200 if msgs else 204
-
-
-    mensagens_json = [
-        {
-            "endToEndId": m.end_to_end_id,
-            "valor": float(m.valor),
-            "pagador": {
-                "nome": m.pagador_nome,
-                "cpfCnpj": m.pagador_cpf_cnpj,
-                "ispb": m.pagador_ispb,
-                "agencia": m.pagador_agencia,
-                "contaTransacional": m.pagador_conta_transacional,
-                "tipoConta": m.pagador_tipo_conta
-            },
-            "recebedor": {
-                "nome": m.recebedor_nome,
-                "cpfCnpj": m.recebedor_cpf_cnpj,
-                "ispb": m.recebedor_ispb,
-                "agencia": m.recebedor_agencia,
-                "contaTransacional": m.recebedor_conta_transacional,
-                "tipoConta": m.recebedor_tipo_conta
-            },
-            "campoLivre": m.campo_livre or "",
-            "txId": m.tx_id,
-            "dataHoraPagamento": m.data_hora_pagamento.isoformat()
-        }
-        for m in msgs
-    ]
-
-    response = JsonResponse({"mensagens": mensagens_json}, status=status_code)
+    response = JsonResponse({"mensagens": serializar_mensagens(msgs)}, status=status_code)
     response["Pull-Next"] = f"/api/pix/{ispb}/stream/{iterationId}"
-
     return response
-
 
 
 @csrf_exempt
@@ -105,22 +49,12 @@ def stream_delete(request, ispb, iterationId):
     if request.method != "DELETE":
         return JsonResponse({"erro": "Método não permitido"}, status=405)
 
-    sessao = PixStream.objects.filter(
-        ispb=ispb, 
-        iteration_id=iterationId, 
-        active=True
-    ).first()
+    from .models import PixStream
 
+    sessao = PixStream.objects.filter(ispb=ispb, iteration_id=iterationId, ativo=True).first()
     if not sessao:
-        return JsonResponse({
-            "erro": "iterationId inválido ou sessão já encerrada"
-        }, status=404)
+        return JsonResponse({"erro": "iterationId inválido ou sessão já encerrada"}, status=404)
 
-    sessao.active = False
-    sessao.save(update_fields=['active'])
-
-    return JsonResponse({
-        "mensagem": "Stream encerrado com sucesso",
-        "iterationId": iterationId
-    }, status=200)
-
+    sessao.ativo = False
+    sessao.save(update_fields=['ativo'])
+    return JsonResponse({"mensagem": "Stream encerrado com sucesso", "iterationId": iterationId}, status=200)

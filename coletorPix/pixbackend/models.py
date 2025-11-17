@@ -1,6 +1,5 @@
 import uuid
 from django.db import models
-from django.utils import timezone
 
 
 class Pix(models.Model):
@@ -19,17 +18,17 @@ class Pix(models.Model):
 
     recebedor_nome = models.CharField(max_length=100)
     recebedor_cpf_cnpj = models.CharField(max_length=20)
-    recebedor_ispb = models.CharField(max_length=20)
+    recebedor_ispb = models.CharField(max_length=20, db_index=True)
     recebedor_agencia = models.CharField(max_length=10)
     recebedor_conta_transacional = models.CharField(max_length=20)
     recebedor_tipo_conta = models.CharField(max_length=10)
 
-    dado_visualizado = models.BooleanField(default=False)
+    dado_visualizado = models.BooleanField(default=False, db_index=True)
 
 
 class PixStream(models.Model):
 
-    iteration_id = models.CharField(max_length=50, unique=True, default=lambda: uuid.uuid4().hex)
+    iteration_id = models.CharField(max_length=50, unique=True, default=uuid.uuid4)
     ispb = models.CharField(max_length=8)
     criacao = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)
